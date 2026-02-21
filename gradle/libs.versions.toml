@@ -8,6 +8,7 @@ junit = "4.13.2"
 junitVersion = "1.3.0"
 kotlin = "2.3.20-Beta2"
 ktor = "3.4.0"
+mdns = "1.0.5"
 json = "1.10.0"
 lifecycleRuntimeKtx = "2.10.0"
 
@@ -28,6 +29,7 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-android = { module = "io.ktor:ktor-client-android", version.ref = "ktor" }
+ktor-mdns = { module = "com.appstractive:dns-sd-kt", version.ref = "mdns" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "json" }
 androidx-material-icons = { group = "androidx.compose.material", name = "material-icons-core" }
 
