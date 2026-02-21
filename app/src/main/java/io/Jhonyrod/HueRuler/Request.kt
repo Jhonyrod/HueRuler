@@ -1,6 +1,5 @@
 package io.Jhonyrod.HueRuler
 
-//import android.content.Context
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -8,33 +7,44 @@ import io.ktor.client.engine.android.*
 import com.appstractive.dnssd.*
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.CancellationException
-import javax.net.ssl.TrustManagerFactory
+import java.security.cert.X509Certificate as X509C
+import java.security.SecureRandom as SRandom
+import javax.net.ssl.*
 
 private const val HUE_ST = "_hue._tcp."
-
 //Removed for privacy
 private const val KEY = "nouser/config"
 
-class Request {//private val context:Context) {
+class Request {
+	private val tmf=TrustManagerFactory.getInstance(
+		TrustManagerFactory
+		.getDefaultAlgorithm()
+	).apply { init(keyStore) }
+	
+	private val sslContext = SSLContext
+	.getInstance("TLS").apply {
+		init(null, tmf.trustManagers, SRandom())
+	}
 	
 	private val servs =
 	mutableMapOf<String, DiscoveredService>()
+	private val snums = mutableMapOf<String,String>()
 	private val client = HttpClient(Android) {
 		engine { sslManager = { conn ->
-			val tmf = TrustManagerFactory
-			.getInstance(
-				TrustManagerFactory
-				.getDefaultAlgorithm()
-			)
-            tmf.init(keyStore)
-            val cont = javax.net.ssl
-			.SSLContext.getInstance("TLS")
-            cont.init(null, tmf.trustManagers, null)
-            conn.sslSocketFactory = cont.socketFactory
-			conn.hostnameVerifier = javax.net.ssl
-			.HostnameVerifier { hn, _ ->
-                servs.values.any {
-                	it.addresses.contains(hn) }
+            conn.sslSocketFactory = sslContext
+			.socketFactory
+			conn.hostnameVerifier = HostnameVerifier{
+				hn, ss ->
+				val expectedSN = snums[hn] ?:
+				return@HostnameVerifier false
+				runCatching {
+					val leaf = ss.peerCertificates[0]
+					as X509C
+					expectedSN.uppercase().equals(
+						subCN(leaf),
+						ignoreCase = true
+					)
+				}.getOrDefault(false)
 			}
 		}}
 	}
@@ -43,13 +53,19 @@ class Request {//private val context:Context) {
 		discoverServices(HUE_ST).collect {
 			when (it) {
 				is DiscoveryEvent.Discovered -> {
-					servs[it.service.key] = it.service
+					servs[it.service.key]=it.service
 					it.resolve()
 				}
 				is DiscoveryEvent.Removed ->
 				servs.remove(it.service.key)
-				is DiscoveryEvent.Resolved ->
-				servs[it.service.key] = it.service
+				is DiscoveryEvent.Resolved -> {
+					servs[it.service.key]=it.service
+					val bID =
+					it.service.txt["bridgeid"]?:
+					return@collect
+					for(addr in it.service.addresses)
+					    snums[addr] = String(bID)
+				}
 			}
 		}
 	}
@@ -59,15 +75,9 @@ class Request {//private val context:Context) {
 			it.addresses.isNotEmpty()
 		}) "No bridges found/resolved"
 		else try {
-			val serv = servs
-			.values
-			.first()
+			val serv = servs.values.first()
 			val addr = serv.addresses.first() + ':' + serv.port
-			val json = client
-			.get("https://$addr/api/$KEY")
-			//.get("https://mockly.me/users?count=5")
-			.bodyAsText()
-			//json
+			val json = client.get("https://$addr/api/$KEY").bodyAsText()
 			tree(Json.parseToJsonElement(json))
 		}catch(e: CancellationException) {
 			"The fetching was cancelled. Try again."

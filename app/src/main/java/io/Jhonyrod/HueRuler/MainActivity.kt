@@ -127,8 +127,6 @@ class MainActivity:ComponentActivity(){
                     }
                 }
                 LaunchedEffect(Unit) {
-                    ksgen(curr, "curr")
-                    ksgen(next, "next")
                     request.discover()
                 }
                 DisposableEffect(request) {
