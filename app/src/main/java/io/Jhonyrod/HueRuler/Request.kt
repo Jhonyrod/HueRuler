@@ -4,10 +4,11 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.client.engine.android.*
+import io.ktor.client.engine.cio.*
 import com.appstractive.dnssd.*
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.CancellationException
-import java.security.cert.X509Certificate as X509C
+import at.asitplus.signum.indispensable.pki.X509Certificate as X509C
 import java.security.SecureRandom as SRandom
 import javax.net.ssl.*
 
@@ -20,8 +21,11 @@ class Request {
 		TrustManagerFactory
 		.getDefaultAlgorithm()
 	).apply { init(keyStore) }
+	private val tmgr = tmf.trustManagers
+    .filterIsInstance<X509TrustManager>()
+    .firstOrNull() ?: throw IllegalStateException("No X509TrustManager found")
 	
-	private val sslContext = SSLContext
+	private val sslCtxt = SSLContext
 	.getInstance("TLS").apply {
 		init(null, tmf.trustManagers, SRandom())
 	}
@@ -30,10 +34,9 @@ class Request {
 	mutableMapOf<String, DiscoveredService>()
 	private val snums = mutableMapOf<String,String>()
 	private val client = HttpClient(Android) {
-		engine { sslManager = { conn ->
-            conn.sslSocketFactory = sslContext
-			.socketFactory
-			conn.hostnameVerifier = HostnameVerifier{
+		engine { sslManager = {
+            sslSocketFactory = sslCtxt.socketFactory
+			hostnameVerifier = HostnameVerifier {
 				hn, ss ->
 				val expectedSN = snums[hn] ?:
 				return@HostnameVerifier false
@@ -41,13 +44,17 @@ class Request {
 					val leaf = ss.peerCertificates[0]
 					as X509C
 					expectedSN.uppercase().equals(
-						subCN(leaf),
-						ignoreCase = true
+						subCN(leaf).uppercase()
 					)
 				}.getOrDefault(false)
 			}
 		}}
 	}
+	
+	//WARNING:	Fragile..? if you know how to use
+	//			LDAP instead go right ahead.
+	private fun subCN(leaf:X509C):String =
+	leaf.TbsCertificate.subjectName
 	
 	suspend fun discover() {
 		discoverServices(HUE_ST).collect {
