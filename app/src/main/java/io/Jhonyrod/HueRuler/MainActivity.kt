@@ -127,7 +127,7 @@ class MainActivity:ComponentActivity(){
                     }
                 }
                 LaunchedEffect(Unit) {
-                    request.discover()
+                    discover("_hue._tcp.")
                 }
                 DisposableEffect(request) {
                     onDispose {
